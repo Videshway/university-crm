@@ -7,119 +7,170 @@ from datetime import datetime
 DB_FILE = "student_data.xlsx"
 UPLOAD_DIR = "student_documents"
 
+# --- USER ACCESS DATA ---
+# In a real app, these would be in a database or st.secrets
+# Format: { "username": {"password": "password123", "name": "Full Name", "role": "admin/agent"} }
+USER_DB = {
+    "admin": {"password": "adminvideshway", "name": "Main Admin", "role": "admin"},
+    "agent1": {"password": "agent1videshway", "name": "Agent Rahul", "role": "agent"},
+    "agent2": {"password": "agent2videshway", "name": "Agent Priya", "role": "agent"}
+}
+
+# --- INITIALIZATION ---
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-# --- UNIVERSITY DATA ---
-UK_UNIS = ["Oxford", "Cambridge", "UCL", "Imperial", "LSE", "Edinburgh", "Manchester", "King's College", "Warwick", "Bristol", "Glasgow", "Durham", "Southampton", "Birmingham", "Leeds", "Sheffield", "Nottingham", "Queen Mary"]
-US_UNIS = ["Harvard", "Stanford", "MIT", "Yale", "Princeton", "Columbia", "UC Berkeley", "UCLA", "UPenn", "NYU", "Cornell", "Dartmouth", "Brown", "Duke", "Johns Hopkins", "Northwestern", "UChicago", "Caltech"]
-ALL_UNIS = sorted([f"{u} (UK)" for u in UK_UNIS] + [f"{u} (US)" for u in US_UNIS])
+if 'logged_in' not in st.session_state:
+    st.session_state['logged_in'] = False
+    st.session_state['user'] = None
 
-# --- DATABASE FUNCTIONS ---
+# --- FUNCTIONS ---
 def load_data():
+    cols = ["Student Name", "Email", "University", "Status", "App Deadline", "Decision Deadline", "Notes", "Assigned Agent"]
     if os.path.exists(DB_FILE):
-        try: return pd.read_excel(DB_FILE)
-        except: return pd.DataFrame(columns=["Student Name", "Email", "University", "Status", "App Deadline", "Decision Deadline", "Notes"])
-    return pd.DataFrame(columns=["Student Name", "Email", "University", "Status", "App Deadline", "Decision Deadline", "Notes"])
+        try:
+            return pd.read_excel(DB_FILE)
+        except:
+            return pd.DataFrame(columns=cols)
+    return pd.DataFrame(columns=cols)
 
-def save_document(student_name, uploaded_file):
-    student_path = os.path.join(UPLOAD_DIR, student_name.replace(" ", "_"))
-    if not os.path.exists(student_path): os.makedirs(student_path)
-    file_path = os.path.join(student_path, uploaded_file.name)
-    with open(file_path, "wb") as f: f.write(uploaded_file.getbuffer())
-
-# --- BRANDING & UI ---
-st.set_page_config(page_title="Videshway Dashboard", page_icon="🌍", layout="wide")
-
-# Custom CSS for Videshway Branding
-st.markdown("""
-    <style>
-    .main-header { font-size: 36px; font-weight: bold; color: #1E3A8A; }
-    .sidebar-brand { font-size: 24px; font-weight: bold; color: #1E3A8A; margin-bottom: 20px; }
-    </style>
-    """, unsafe_allow_html=True) # FIXED: Changed from unsafe_allow_index to unsafe_allow_html
-
-# Sidebar Branding
-st.sidebar.markdown('<p class="sidebar-brand">🌍 Videshway Admin</p>', unsafe_allow_html=True)
-menu = ["📈 Global Pipeline", "➕ Add Student", "📂 Document Vault"]
-choice = st.sidebar.selectbox("Navigation", menu)
-
-df = load_data()
-
-# --- MAIN LOGIC ---
-st.markdown(f'<p class="main-header">Videshway - Client Management Dashboard</p>', unsafe_allow_html=True)
-
-if choice == "➕ Add Student":
-    st.subheader("Register New Client")
-    with st.form("main_form", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            name = st.text_input("Student Full Name")
-            email = st.text_input("Email Address")
-            university = st.selectbox("Target University", options=ALL_UNIS)
-        with col2:
-            status = st.selectbox("Current Status", ["Inquiry", "Documents Collected", "Applied", "Offer Received", "Visa Process", "Enrolled"])
-            app_deadline = st.date_input("Application Deadline")
-            dec_deadline = st.date_input("Expected Decision Date")
-        
-        notes = st.text_area("Counselor Notes")
-        submit = st.form_submit_button("✅ Save to Videshway Database")
-
-        if submit:
-            if name:
-                new_entry = {
-                    "Student Name": name, "Email": email, "University": university,
-                    "Status": status, "App Deadline": app_deadline,
-                    "Decision Deadline": dec_deadline, "Notes": notes
-                }
-                df = pd.concat([df, pd.DataFrame([new_entry])], ignore_index=True)
-                df.to_excel(DB_FILE, index=False)
-                st.success(f"Record for {name} created successfully!")
-            else:
-                st.error("Student Name is required.")
-
-elif choice == "📈 Global Pipeline":
-    st.subheader("Current Application Tracking")
+def save_document(agent_name, student_name, uploaded_file):
+    # Documents stored as: student_documents/AgentName/StudentName/file.pdf
+    agent_folder = agent_name.replace(" ", "_")
+    student_folder = student_name.replace(" ", "_")
+    path = os.path.join(UPLOAD_DIR, agent_folder, student_folder)
     
-    if df.empty:
-        st.info("No active students in the database.")
-    else:
-        # KPI Metrics
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Students", len(df))
-        col2.metric("Offers Received", len(df[df['Status'] == "Offer Received"]))
-        col3.metric("Applications Sent", len(df[df['Status'] == "Applied"]))
+    if not os.path.exists(path):
+        os.makedirs(path)
+        
+    file_path = os.path.join(path, uploaded_file.name)
+    with open(file_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
 
-        # Search & Table
-        search = st.text_input("🔍 Quick Search (Name or University)")
-        filtered_df = df[df.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)]
-        st.dataframe(filtered_df, use_container_width=True)
+# --- LOGIN SCREEN ---
+def login_page():
+    st.set_page_config(page_title="Videshway Login", page_icon="🌍")
+    
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        st.image("https://via.placeholder.com/150?text=Videshway", width=150) # Replace with your logo URL
+        st.title("Videshway Login")
+        user = st.text_input("Username")
+        pwd = st.text_input("Password", type="password")
         
-        # Download
-        if os.path.exists(DB_FILE):
-            with open(DB_FILE, "rb") as f:
-                st.download_button("📥 Export Videshway Data (Excel)", f, file_name="Videshway_Master_List.xlsx")
+        if st.button("Login"):
+            if user in USER_DB and USER_DB[user]["password"] == pwd:
+                st.session_state['logged_in'] = True
+                st.session_state['user'] = user
+                st.session_state['user_name'] = USER_DB[user]["name"]
+                st.session_state['role'] = USER_DB[user]["role"]
+                st.rerun()
+            else:
+                st.error("Invalid Username or Password")
 
-elif choice == "📂 Document Vault":
-    st.subheader("Client Document Repository")
-    if df.empty:
-        st.warning("Please add students first.")
-    else:
-        selected_student = st.selectbox("Select Student", df["Student Name"].unique())
+# --- MAIN DASHBOARD ---
+def main_dashboard():
+    st.set_page_config(page_title="Videshway Dashboard", page_icon="🌍", layout="wide")
+    
+    user_info = USER_DB[st.session_state['user']]
+    agent_name = user_info['name']
+    role = user_info['role']
+
+    # Sidebar
+    st.sidebar.markdown(f"### Welcome, {agent_name}")
+    st.sidebar.info(f"Role: {role.capitalize()}")
+    
+    menu = ["📈 Global Pipeline", "➕ Add Student", "📂 Document Vault"]
+    choice = st.sidebar.selectbox("Navigation", menu)
+    
+    if st.sidebar.button("Logout"):
+        st.session_state['logged_in'] = False
+        st.rerun()
+
+    df = load_data()
+
+    # --- BRANDING ---
+    st.markdown(f'<h1 style="color: #1E3A8A;">Videshway Dashboard</h1>', unsafe_allow_html=True)
+
+    if choice == "➕ Add Student":
+        st.subheader("Register New Client")
+        with st.form("add_form", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                name = st.text_input("Student Name")
+                email = st.text_input("Email")
+                uni = st.selectbox("University", ["Oxford (UK)", "Harvard (US)", "Cambridge (UK)", "Stanford (US)"]) # Expand this list
+            with col2:
+                status = st.selectbox("Status", ["Applied", "Offer Received", "Visa", "Enrolled"])
+                deadline = st.date_input("Deadline")
+            
+            notes = st.text_area("Notes")
+            submit = st.form_submit_button("Save Application")
+
+            if submit and name:
+                new_data = {
+                    "Student Name": name, "Email": email, "University": uni,
+                    "Status": status, "App Deadline": deadline, "Notes": notes,
+                    "Assigned Agent": agent_name # Records who created it
+                }
+                df = pd.concat([df, pd.DataFrame([new_data])], ignore_index=True)
+                df.to_excel(DB_FILE, index=False)
+                st.success(f"Added {name} to your pipeline.")
+
+    elif choice == "📈 Global Pipeline":
+        st.subheader("Application Tracking")
         
-        st.write(f"### Manage Files for {selected_student}")
-        files = st.file_uploader("Upload Passport, Transcripts, SOPs", accept_multiple_files=True)
-        if st.button("Upload to Cloud"):
-            if files:
-                for f in files: save_document(selected_student, f)
-                st.success("Documents Uploaded!")
-        
-        st.write("---")
-        st.write("### Download Files")
-        student_folder = os.path.join(UPLOAD_DIR, selected_student.replace(" ", "_"))
-        if os.path.exists(student_folder):
-            for file_name in os.listdir(student_folder):
-                with open(os.path.join(student_folder, file_name), "rb") as f:
-                    st.download_button(f"📄 {file_name}", f, file_name=file_name, key=file_name)
+        # FILTERING LOGIC
+        if role == "admin":
+            display_df = df # Admins see all
+            st.write("📊 *Showing all records (Admin View)*")
         else:
-            st.info("No documents found for this student.")
+            display_df = df[df["Assigned Agent"] == agent_name] # Agents see only theirs
+            st.write(f"📊 *Showing records for {agent_name}*")
+
+        if display_df.empty:
+            st.info("No records found.")
+        else:
+            search = st.text_input("Search...")
+            filtered = display_df[display_df.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)]
+            st.dataframe(filtered, use_container_width=True)
+
+    elif choice == "📂 Document Vault":
+        st.subheader("Document Vault")
+        
+        # Filter student list by agent ownership
+        if role == "admin":
+            available_students = df["Student Name"].unique()
+        else:
+            available_students = df[df["Assigned Agent"] == agent_name]["Student Name"].unique()
+
+        if len(available_students) == 0:
+            st.warning("No students found in your pipeline.")
+        else:
+            selected_student = st.selectbox("Select Student", available_students)
+            
+            # Record who is uploading
+            owner_agent = df[df["Student Name"] == selected_student]["Assigned Agent"].values[0]
+
+            files = st.file_uploader("Upload Docs", accept_multiple_files=True)
+            if st.button("Upload"):
+                for f in files:
+                    save_document(owner_agent, selected_student, f)
+                st.success("Documents Saved.")
+
+            st.write("---")
+            st.write("### Download Files")
+            # Look in the specific agent's folder
+            path = os.path.join(UPLOAD_DIR, owner_agent.replace(" ", "_"), selected_student.replace(" ", "_"))
+            if os.path.exists(path):
+                for f_name in os.listdir(path):
+                    with open(os.path.join(path, f_name), "rb") as f:
+                        st.download_button(f"📄 {f_name}", f, file_name=f_name, key=f_name)
+            else:
+                st.info("No files uploaded yet.")
+
+# --- RUN APP ---
+if not st.session_state['logged_in']:
+    login_page()
+else:
+    main_dashboard()
