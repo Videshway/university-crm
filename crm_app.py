@@ -7,63 +7,63 @@ from datetime import datetime
 DB_FILE = "student_data.xlsx"
 UPLOAD_DIR = "student_documents"
 
-# Create upload directory if it doesn't exist
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-# --- UNIVERSITY DATA ---
-# (Added a few more for you)
-UK_UNIS = ["Oxford", "Cambridge", "UCL", "Imperial", "LSE", "Edinburgh", "Manchester", "King's College", "Warwick", "Bristol", "Glasgow", "Durham", "Southampton", "Birmingham"]
-US_UNIS = ["Harvard", "Stanford", "MIT", "Yale", "Princeton", "Columbia", "UC Berkeley", "UCLA", "UPenn", "NYU", "Cornell", "Dartmouth", "Brown", "Duke", "Johns Hopkins"]
+# --- UNIVERSITY DATA (Expanded) ---
+UK_UNIS = ["Oxford", "Cambridge", "UCL", "Imperial", "LSE", "Edinburgh", "Manchester", "King's College", "Warwick", "Bristol", "Glasgow", "Durham", "Southampton", "Birmingham", "Leeds", "Sheffield", "Nottingham", "Queen Mary"]
+US_UNIS = ["Harvard", "Stanford", "MIT", "Yale", "Princeton", "Columbia", "UC Berkeley", "UCLA", "UPenn", "NYU", "Cornell", "Dartmouth", "Brown", "Duke", "Johns Hopkins", "Northwestern", "UChicago", "Caltech"]
 ALL_UNIS = sorted([f"{u} (UK)" for u in UK_UNIS] + [f"{u} (US)" for u in US_UNIS])
 
 # --- DATABASE FUNCTIONS ---
 def load_data():
     if os.path.exists(DB_FILE):
-        try:
-            return pd.read_excel(DB_FILE)
-        except:
-            return pd.DataFrame(columns=["Student Name", "Email", "University", "Status", "App Deadline", "Decision Deadline", "Notes"])
-    else:
-        return pd.DataFrame(columns=["Student Name", "Email", "University", "Status", "App Deadline", "Decision Deadline", "Notes"])
+        try: return pd.read_excel(DB_FILE)
+        except: return pd.DataFrame(columns=["Student Name", "Email", "University", "Status", "App Deadline", "Decision Deadline", "Notes"])
+    return pd.DataFrame(columns=["Student Name", "Email", "University", "Status", "App Deadline", "Decision Deadline", "Notes"])
 
 def save_document(student_name, uploaded_file):
     student_path = os.path.join(UPLOAD_DIR, student_name.replace(" ", "_"))
-    if not os.path.exists(student_path):
-        os.makedirs(student_path)
-    
+    if not os.path.exists(student_path): os.makedirs(student_path)
     file_path = os.path.join(student_path, uploaded_file.name)
-    with open(file_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    return file_path
+    with open(file_path, "wb") as f: f.write(uploaded_file.getbuffer())
 
-# --- UI INTERFACE ---
-st.set_page_config(page_title="UniApply CRM Pro", layout="wide")
-st.title("🎓 University Application CRM + Document Manager")
+# --- BRANDING & UI ---
+st.set_page_config(page_title="Videshway Dashboard", page_icon="🌍", layout="wide")
 
-menu = ["Pipeline View", "Add New Application", "Document Vault"]
+# Custom CSS for Videshway Branding
+st.markdown("""
+    <style>
+    .main-header { font-size: 36px; font-weight: bold; color: #1E3A8A; }
+    .sidebar-brand { font-size: 24px; font-weight: bold; color: #1E3A8A; margin-bottom: 20px; }
+    </style>
+    """, unsafe_allow_index=True)
+
+# Sidebar Branding
+st.sidebar.markdown('<p class="sidebar-brand">🌍 Videshway Admin</p>', unsafe_allow_html=True)
+menu = ["📈 Global Pipeline", "➕ Add Student", "📂 Document Vault"]
 choice = st.sidebar.selectbox("Navigation", menu)
 
 df = load_data()
 
-if choice == "Add New Application":
-    st.subheader("📝 New Application Entry")
-    
+# --- MAIN LOGIC ---
+st.markdown(f'<p class="main-header">Videshway - Client Management Dashboard</p>', unsafe_allow_html=True)
+
+if choice == "➕ Add Student":
+    st.subheader("Register New Client")
     with st.form("main_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
-        
         with col1:
             name = st.text_input("Student Full Name")
             email = st.text_input("Email Address")
-            university = st.selectbox("Select University", options=ALL_UNIS)
-            status = st.selectbox("Status", ["Inquiry", "Applied", "Offer Received", "Waitlisted", "Enrolled"])
-            
+            university = st.selectbox("Target University", options=ALL_UNIS)
         with col2:
-            app_deadline = st.date_input("Application Submission Deadline")
-            dec_deadline = st.date_input("Decision Expected By")
-            notes = st.text_area("Internal Notes")
+            status = st.selectbox("Current Status", ["Inquiry", "Documents Collected", "Applied", "Offer Received", "Visa Process", "Enrolled"])
+            app_deadline = st.date_input("Application Deadline")
+            dec_deadline = st.date_input("Expected Decision Date")
         
-        submit = st.form_submit_button("Save Application to Excel")
+        notes = st.text_area("Counselor Notes")
+        submit = st.form_submit_button("✅ Save to Videshway Database")
 
         if submit:
             if name:
@@ -74,59 +74,52 @@ if choice == "Add New Application":
                 }
                 df = pd.concat([df, pd.DataFrame([new_entry])], ignore_index=True)
                 df.to_excel(DB_FILE, index=False)
-                st.success(f"Successfully saved {name}'s application! Refresh the page to see changes.")
+                st.success(f"Record for {name} created successfully!")
             else:
-                st.error("Please enter a student name.")
+                st.error("Student Name is required.")
 
-elif choice == "Pipeline View":
-    st.subheader("📊 Global Application Pipeline")
+elif choice == "📈 Global Pipeline":
+    st.subheader("Current Application Tracking")
     
     if df.empty:
-        st.info("No records found. Go to 'Add New Application' to create your first record.")
+        st.info("No active students in the database.")
     else:
-        search_query = st.text_input("Search student or university...")
-        filtered_df = df[df.astype(str).apply(lambda x: x.str.contains(search_query, case=False)).any(axis=1)]
+        # KPI Metrics
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Students", len(df))
+        col2.metric("Offers Received", len(df[df['Status'] == "Offer Received"]))
+        col3.metric("Applications Sent", len(df[df['Status'] == "Applied"]))
+
+        # Search & Table
+        search = st.text_input("🔍 Quick Search (Name or University)")
+        filtered_df = df[df.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)]
         st.dataframe(filtered_df, use_container_width=True)
         
-        # Only show download button if file exists
+        # Download
         if os.path.exists(DB_FILE):
             with open(DB_FILE, "rb") as f:
-                st.download_button(
-                    label="📥 Download Database as Excel",
-                    data=f,
-                    file_name="UniCRM_Data.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+                st.download_button("📥 Export Videshway Data (Excel)", f, file_name="Videshway_Master_List.xlsx")
 
-elif choice == "Document Vault":
-    st.subheader("📂 Document Management")
-    
+elif choice == "📂 Document Vault":
+    st.subheader("Client Document Repository")
     if df.empty:
-        st.warning("No students found. Add a student first.")
+        st.warning("Please add students first.")
     else:
-        student_list = df["Student Name"].unique()
-        selected_student = st.selectbox("Select Student", student_list)
+        selected_student = st.selectbox("Select Student", df["Student Name"].unique())
         
-        st.write(f"### Upload for {selected_student}")
-        uploaded_files = st.file_uploader("Upload Passport, Transcripts, etc.", accept_multiple_files=True)
+        st.write(f"### Manage Files for {selected_student}")
+        files = st.file_uploader("Upload Passport, Transcripts, SOPs", accept_multiple_files=True)
+        if st.button("Upload to Cloud"):
+            if files:
+                for f in files: save_document(selected_student, f)
+                st.success("Documents Uploaded!")
         
-        if st.button("Save Documents"):
-            if uploaded_files:
-                for f in uploaded_files:
-                    save_document(selected_student, f)
-                st.success(f"Saved {len(uploaded_files)} files.")
-            else:
-                st.error("Please select files first.")
-
         st.write("---")
-        st.write("### Existing Documents")
+        st.write("### Download Files")
         student_folder = os.path.join(UPLOAD_DIR, selected_student.replace(" ", "_"))
         if os.path.exists(student_folder):
-            files = os.listdir(student_folder)
-            for file_name in files:
-                col_a, col_b = st.columns([0.8, 0.2])
-                col_a.write(f"📄 {file_name}")
+            for file_name in os.listdir(student_folder):
                 with open(os.path.join(student_folder, file_name), "rb") as f:
-                    col_b.download_button("Download", f, file_name=file_name, key=file_name)
+                    st.download_button(f"📄 {file_name}", f, file_name=file_name)
         else:
-            st.info("No documents uploaded yet.")
+            st.info("No documents found for this student.")
