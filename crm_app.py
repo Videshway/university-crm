@@ -10,7 +10,7 @@ UPLOAD_DIR = "student_documents"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-# --- UNIVERSITY DATA (Expanded) ---
+# --- UNIVERSITY DATA ---
 UK_UNIS = ["Oxford", "Cambridge", "UCL", "Imperial", "LSE", "Edinburgh", "Manchester", "King's College", "Warwick", "Bristol", "Glasgow", "Durham", "Southampton", "Birmingham", "Leeds", "Sheffield", "Nottingham", "Queen Mary"]
 US_UNIS = ["Harvard", "Stanford", "MIT", "Yale", "Princeton", "Columbia", "UC Berkeley", "UCLA", "UPenn", "NYU", "Cornell", "Dartmouth", "Brown", "Duke", "Johns Hopkins", "Northwestern", "UChicago", "Caltech"]
 ALL_UNIS = sorted([f"{u} (UK)" for u in UK_UNIS] + [f"{u} (US)" for u in US_UNIS])
@@ -37,7 +37,7 @@ st.markdown("""
     .main-header { font-size: 36px; font-weight: bold; color: #1E3A8A; }
     .sidebar-brand { font-size: 24px; font-weight: bold; color: #1E3A8A; margin-bottom: 20px; }
     </style>
-    """, unsafe_allow_index=True)
+    """, unsafe_allow_html=True) # FIXED: Changed from unsafe_allow_index to unsafe_allow_html
 
 # Sidebar Branding
 st.sidebar.markdown('<p class="sidebar-brand">🌍 Videshway Admin</p>', unsafe_allow_html=True)
@@ -120,6 +120,6 @@ elif choice == "📂 Document Vault":
         if os.path.exists(student_folder):
             for file_name in os.listdir(student_folder):
                 with open(os.path.join(student_folder, file_name), "rb") as f:
-                    st.download_button(f"📄 {file_name}", f, file_name=file_name)
+                    st.download_button(f"📄 {file_name}", f, file_name=file_name, key=file_name)
         else:
             st.info("No documents found for this student.")
